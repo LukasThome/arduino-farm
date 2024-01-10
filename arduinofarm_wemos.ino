@@ -17,7 +17,7 @@ int pinTempSensor = D0;
 int pinSensorSolo = A0;
 int pinoRele = D5;  // Usar a pinagem correta para o relé no Wemos D1 R1 (D1, D2, etc.)
 
-float parametroBaixaUmidade = 0.02;
+float parametroBaixaUmidade = 0;
 bool bombaLigada = false;
 bool exibirMensagemBombaLigada = false;
 
@@ -67,7 +67,7 @@ void setupWiFi() {
 void enviarLeitura(float valor) {
   HTTPClient http;
 
-  String fullUrl = "http://192.168.174.51:8090/receber-leitura" ;
+  String fullUrl = "http://192.168.58.51:8090/receber-leitura" ;
 
   WiFiClient client;
   http.begin(client, fullUrl);
@@ -82,7 +82,6 @@ void enviarLeitura(float valor) {
   String jsonPayload;
   serializeJson(jsonDocument, jsonPayload);
 
-  // Set content type
   http.addHeader("Content-Type", "application/json");
 
   // Realiza o POST
@@ -95,9 +94,50 @@ void enviarLeitura(float valor) {
     Serial.println(httpCode);
   }
 
+
   http.end();
 }
 
+
+void atualizarValorUmidade() {
+  HTTPClient http;
+
+  // Update the server URL to the appropriate endpoint
+  String fullUrl = "http://192.168.58.51:8000/Config/ler-umidade";
+
+  WiFiClient client;
+  http.begin(client, fullUrl);
+
+  // Realiza o GET
+  int httpCode = http.GET();
+
+  if (httpCode == HTTP_CODE_OK) {
+    String resposta = http.getString();
+
+    // Parse the JSON response
+    DynamicJsonDocument jsonDocument(200);
+    DeserializationError error = deserializeJson(jsonDocument, resposta);
+
+    if (error) {
+        Serial.print("Erro ao analisar JSON: ");
+        Serial.println(error.c_str());
+    } else {
+        // Extract the "umidade" value from the JSON object
+        float novoValor = jsonDocument["umidade"].as<float>();
+
+        Serial.print("Novo valor para parametroBaixaUmidade: ");
+        Serial.println(novoValor);
+
+        parametroBaixaUmidade = novoValor;  // Update the global variable
+    }
+
+  } else {
+    Serial.print("Erro na atualizacao da umidade. Código HTTP: ");
+    Serial.println(httpCode);
+  }
+
+  http.end();
+}
 
 
 
@@ -205,6 +245,8 @@ void setup() {
   pinMode(pinSensorSolo, INPUT);
   pinMode(pinoRele, OUTPUT);
 
+  lcd.begin(0x3E, 0x62);
+
   lcd.begin(16, 2);  
   lcd.setRGB(100, 100, 100);
   lcd.createChar(0, ventilacaoIcone);
@@ -244,9 +286,16 @@ void loop() {
     }
     Serial.print("Novo valor para parametroBaixaUmidade: ");
     Serial.println(parametroBaixaUmidade);
+    atualizarValorUmidade();
+
+
   }
 
   delay(5000);
   enviarLeitura(umidade); // Send temperature reading
+  
+  atualizarValorUmidade();
+  Serial.println(parametroBaixaUmidade);
+
 
 }
